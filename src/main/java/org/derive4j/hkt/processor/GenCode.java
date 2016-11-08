@@ -1,6 +1,9 @@
 package org.derive4j.hkt.processor;
 
 import com.squareup.javapoet.*;
+import javax.annotation.processing.Messager;
+import javax.lang.model.element.Element;
+import javax.tools.Diagnostic;
 import org.derive4j.hkt.Hkt;
 import org.derive4j.hkt.__;
 import org.derive4j.hkt.processor.DataTypes.HktDecl;
@@ -27,11 +30,13 @@ final class GenCode {
     private final Elements Elts;
     private final Types Types;
     private final Filer Filer;
+    private final Messager messager;
 
-    GenCode(Elements elts, Types types, Filer filer) {
+    GenCode(Elements elts, Types types, Filer filer, Messager messager) {
         Elts = elts;
         Types = types;
         Filer = filer;
+        this.messager = messager;
     }
 
     IO<Unit> run(HktDecl hktDecl) {
@@ -39,9 +44,9 @@ final class GenCode {
 
         return genClassFile(genClassName)
 
-            .bind(ofo -> IO.sequenceOpt(ofo.map(this::delete))
+            .bind(ofo -> IO.effect(() -> messager.printMessage(Diagnostic.Kind.WARNING, ofo.toString())))
 
-                .bind(ou -> createClass(hktDecl, genClass(hktDecl))));
+                .bind(ou -> createClass(hktDecl, genClass(hktDecl)));
     }
 
     private IO<Unit> createClass(HktDecl hktDecl, TypeSpec genClass) {
@@ -117,19 +122,10 @@ final class GenCode {
 //        };
 //    }
 
-    private IO<Optional<FileObject>> genClassFile(String genClassName) {
+    private IO<Optional<TypeElement>> genClassFile(String genClassName) {
         return () -> {
-
-            System.out.println("Reading File : " + genClassName);
-
-            final FileObject fileObject =
-                Filer.getResource(StandardLocation.SOURCE_OUTPUT, "", genClassName);
-            try {
-                fileObject.getCharContent(true); // force loading (detection) of the file
-                return Optional.of(fileObject);
-            } catch (FileNotFoundException e) {
-                return Optional.empty();
-            }
+            messager.printMessage(Diagnostic.Kind.WARNING, "Reading File : " + genClassName);
+            return Optional.ofNullable(Elts.getTypeElement(genClassName));
         };
     }
 

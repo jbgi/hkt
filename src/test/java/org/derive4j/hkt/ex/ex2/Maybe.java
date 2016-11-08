@@ -1,4 +1,4 @@
-package org.derive4j.hkt.ex;
+package org.derive4j.hkt.ex.ex2;
 
 import org.derive4j.hkt.__;
 

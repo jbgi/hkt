@@ -30,6 +30,10 @@
 package org.derive4j.hkt.processor;
 
 import com.google.auto.service.AutoService;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Predicate;
 import org.derive4j.hkt.Hkt;
 import org.derive4j.hkt.__;
 import org.derive4j.hkt.processor.DataTypes.*;
@@ -68,6 +72,8 @@ public final class HktProcessor extends AbstractProcessor {
 
     private TypeElement __Elt;
 
+    private ArrayList<DataTypes.HktDecl> hktDecls = new ArrayList<>();
+
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
@@ -75,11 +81,12 @@ public final class HktProcessor extends AbstractProcessor {
         Filer = processingEnv.getFiler();
         Types = processingEnv.getTypeUtils();
         Elts = processingEnv.getElementUtils();
-        GenCode = new GenCode(Elts, Types, Filer);
+        GenCode = new GenCode(Elts, Types, Filer,  processingEnv.getMessager());
         Messager = processingEnv.getMessager();
         JdkSpecificApi = jdkSpecificApi(processingEnv);
 
         __Elt = Elts.getTypeElement(__.class.getCanonicalName());
+
     }
 
     @Override
@@ -97,14 +104,21 @@ public final class HktProcessor extends AbstractProcessor {
             final Stream<Valid> validations = targetTypes.flatMap(this::checkHktType);
 
             final Stream<IO<Unit>> effects = validations.map(_Valid.cases()
-                //.Success(GenCode::run)
-                .Fail(this::reportError)
-                .otherwise(IO.unit(Unit.unit)));
+                .Success(hktDecl -> IO.effect(() -> hktDecls.add(hktDecl)))
+                .Fail(this::reportError));
 
             IO.unsafeRun(effects);
         } else {
+            IO.unsafeRun(hktDecls.stream().filter(new Predicate<HktDecl>() {
+                Map<Object,Boolean> seen = new HashMap<>();
+                @Override
+                public boolean test(HktDecl hktDecl) {
+                    return seen.putIfAbsent(_HktDecl.getTypeConstructor(hktDecl), Boolean.TRUE) == null;
+                }
+            }).map(GenCode::run));
             System.out.println("Ok, processing over");
             System.out.println("Further elements " + roundEnv.getRootElements().size());
+
         }
         return false;
     }
